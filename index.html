@@ -80,7 +80,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
 <body>
 <canvas id="c"></canvas>
 <div id="cross"></div>
-<div id="hud"><span id="zlab">LOBBY MINIJEUX · L'ARÈNE DE GERTRUDE</span><br><span id="hint">ZQSD / WASD : marcher · Maj : courir · Espace : sauter · souris : regarder · E : parler / examiner · N : jour/nuit · M : son</span></div>
+<div id="hud"><span id="zlab">LOBBY MINIJEUX · L'ARÈNE DE GERTRUDE</span><br><span id="hint">ZQSD / WASD : marcher · Maj : courir · Espace : sauter · souris : regarder · E : parler / examiner · N : jour/nuit · M : son · V : se voir</span></div>
 <div id="prompt"></div>
 <div id="dlg"><img id="dpic" alt=""><div id="dbody"><h3 id="dt"></h3><p id="dp"></p><div class="btns" id="db"></div></div></div>
 <div id="rtx"></div>
@@ -665,7 +665,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
     var n = String(prof.n == null ? "" : prof.n).replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 16);
     var clean = { n: n, c: mpClamp(prof.c, 0, MPCOL.length - 1), s: mpClamp(prof.s, 0, MPSKIN.length - 1), h: mpClamp(prof.h, 0, 5), p: mpClamp(prof.p, 0, 6) };
     if (n) MP.name = n;
-    MP.col = MPCOL[clean.c]; MP.st = [clean.s, clean.h, clean.p];
+    MP.col = MPCOL[clean.c]; MP.st = [clean.s, clean.h, clean.p]; MP.styled = true;
     if (fromHash) {
       try { localStorage.setItem("yyMpProfile", JSON.stringify(clean)); } catch (e) {}
       try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
@@ -679,7 +679,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
     if (MP.role === "host") t = "MULTI · hôte · " + n + " joueur" + (n > 1 ? "s" : "");
     else if (MP.role === "client") t = "MULTI · connecté · " + n + " joueur" + (n > 1 ? "s" : "");
     else t = MP.on ? "MULTI · connexion…" : "SOLO";
-    mpEl.textContent = nA(t + " · " + MP.name);
+    mpEl.textContent = nA(t + " · " + MP.name + (MP.styled ? " · style charge" : "") + (MP.err && MP.role === "solo" ? " · reseau: " + MP.err : ""));
   }
   var _fin = finale;
   finale = function () { _fin(); mpSendFx(); };
@@ -721,7 +721,6 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
     }
     f.geo.attributes.position.needsUpdate = true;
   }
-  var mySelfFx = mkFx(MP.st[2]); if (mySelfFx) scene.add(mySelfFx.pts);
   function mkAvatar(name, col, st) {
     st = mpSt(st);
     var g = new THREE.Group();
@@ -733,9 +732,12 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
     var tag = new THREE.Mesh(new THREE.PlaneGeometry(2.6, .42), label(nA(name), 256, 40, "#2a1a3a", "#ffd24a", 16)); tag.position.y = 2.9; tag.material.side = THREE.DoubleSide; g.add(tag);
     g.userData.tag = tag; if (st[2]) { g.userData.fx = mkFx(st[2]); g.add(g.userData.fx.pts); } scene.add(g); return g;
   }
+  function mkAvatarSafe(name, col, st) {
+    try { return mkAvatar(name, col, st); } catch (e) { try { console.error("avatar", e); } catch (x) {} return mkAvatar(name, col, [0, 0, 0]); }
+  }
   function mpUpsert(id, name, col, x, y, z, yaw, st) {
     var o = MP.others[id];
-    if (!o) { o = MP.others[id] = { id: id, name: name, col: col, x: x, y: y, z: z, yaw: yaw, g: mkAvatar(name, col, st) }; o.g.position.set(x, y, z); mpStatus(); }
+    if (!o) { o = MP.others[id] = { id: id, name: name, col: col, x: x, y: y, z: z, yaw: yaw, g: mkAvatarSafe(name, col, st) }; o.g.position.set(x, y, z); mpStatus(); }
     o.tx = x; o.ty = y; o.tz = z; o.tyaw = yaw; o.seen = performance.now();
   }
   function mpRemove(id) { var o = MP.others[id]; if (!o) return; scene.remove(o.g); delete MP.others[id]; mpStatus(); }
@@ -751,10 +753,11 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
     var pr, settled = false;
     try { pr = new Peer(HOST_ID); } catch (e) { MP.retryT = setTimeout(mpTryHost, 4000); return; }
     MP.peer = pr; MP.role = "solo"; mpStatus();
-    pr.on("open", function () { settled = true; MP.role = "host"; MP.me = HOST_ID; mpStatus(); rtx("Vous êtes l'hôte de la partie"); });
+    pr.on("open", function () { settled = true; MP.err = null; MP.role = "host"; MP.me = HOST_ID; mpStatus(); rtx("Vous êtes l'hôte de la partie"); });
     pr.on("connection", mpOnClient);
     pr.on("disconnected", function () { if (settled && !pr.destroyed) { try { pr.reconnect(); } catch (e) {} } });
     pr.on("error", function (err) {
+      MP.err = (err && err.type) || "inconnue"; try { console.warn("PeerJS (hote)", err); } catch (x) {} mpStatus();
       if (settled) return;
       if (err && err.type === "unavailable-id") { settled = true; MP.joinT = setTimeout(mpJoin, 100 + Math.random() * 400); }
       else { settled = true; MP.retryT = setTimeout(mpTryHost, 4000 + Math.random() * 2000); }
@@ -769,13 +772,13 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
       MP.me = id; c = pr.connect(HOST_ID, { reliable: true });
       var to = setTimeout(function () { if (!done && !(c && c.open)) fail(); }, 7000);
       c.on("open", function () {
-        clearTimeout(to); MP.role = "client"; MP.hostConn = c; MP.lastHostMsg = performance.now(); mpSafeSend(c, { t: "hi", name: MP.name, col: MP.col, st: MP.st }); mpStatus();
+        clearTimeout(to); MP.err = null; MP.role = "client"; MP.hostConn = c; MP.lastHostMsg = performance.now(); mpSafeSend(c, { t: "hi", name: MP.name, col: MP.col, st: MP.st }); mpStatus();
       });
       c.on("data", function (d) { MP.lastHostMsg = performance.now(); mpOnHostData(d); });
       c.on("close", function () { if (MP.role === "client") mpHostLost(); else fail(); });
       c.on("error", function () { if (MP.role === "client") mpHostLost(); else fail(); });
     });
-    pr.on("error", function (err) { if (err && err.type === "peer-unavailable") fail(); else if (!MP.hostConn) fail(3000); });
+    pr.on("error", function (err) { MP.err = (err && err.type) || "inconnue"; try { console.warn("PeerJS (client)", err); } catch (x) {} mpStatus(); if (err && err.type === "peer-unavailable") fail(); else if (!MP.hostConn) fail(3000); });
     pr.on("disconnected", function () { if (done || MP.role === "client") return; });
   }
   function mpHostLost() { MP.role = "solo"; mpClearAll(); mpStatus(); rtx("Hôte perdu… migration en cours"); clearTimeout(MP.retryT); MP.retryT = setTimeout(mpTryHost, 200 + Math.random() * 1300); }
@@ -816,9 +819,19 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
     }
   }, 100);
   /* --- rendu des joueurs distants (appelé à chaque image) --- */
+  var selfAv = null;
+  function toggleSelf() {
+    if (!selfAv) selfAv = mkAvatar(MP.name, MP.col, MP.st);
+    selfAv.visible = !selfAv.visible; rtx(selfAv.visible ? "Miroir : vous vous voyez (V pour quitter)" : "Miroir désactivé");
+  }
+  addEventListener("keydown", function (e) { if (e.key && e.key.toLowerCase() === "v" && started && !dlgOn && !godMenu && !cutscene) toggleSelf(); });
   function mpFrame(dt) {
     var k = Math.min(1, dt * 10), cp = camera.position, tt = performance.now() / 1000;
-    if (mySelfFx) { mySelfFx.pts.position.set(cp.x, cp.y - 1.7, cp.z); updFx(mySelfFx, tt); }
+    if (selfAv && selfAv.visible) {   /* miroir : on se voit devant soi (touche V) */
+      selfAv.position.set(cp.x - Math.sin(yaw) * 2.8, cp.y - 1.7, cp.z - Math.cos(yaw) * 2.8); selfAv.rotation.y = yaw + Math.PI;
+      selfAv.userData.tag.rotation.y = Math.atan2(cp.x - selfAv.position.x, cp.z - selfAv.position.z) - selfAv.rotation.y;
+      if (selfAv.userData.fx) updFx(selfAv.userData.fx, tt);
+    }
     Object.keys(MP.others).forEach(function (id) {
       var o = MP.others[id], g = o.g;
       g.position.x += (o.tx - g.position.x) * k; g.position.y += (o.ty - g.position.y) * k; g.position.z += (o.tz - g.position.z) * k;
