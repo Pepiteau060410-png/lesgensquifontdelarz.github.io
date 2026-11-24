@@ -648,8 +648,29 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
      - Si l'hôte part, chaque client retente de réserver HOST_ID : le premier qui y arrive devient le nouvel hôte,
        les autres se reconnectent à lui. Aucune autre donnée n'est stockée côté serveur. */
   var HOST_ID = "yoleyole3d-minijeux-lobby-v1-host";
-  var MPCOL = [0xff4a5a, 0x4ab0ff, 0xffd24a, 0xb06aff, 0x4aff9a, 0xff8a3a, 0xff6ac8, 0x7affea];
+  var MPCOL = [0xff4a5a, 0x4ab0ff, 0xffd24a, 0xb06aff, 0x4aff9a, 0xff8a3a, 0xff6ac8, 0x7affea, 0xffffff, 0x2b2b3a, 0x8a5a31, 0x78cc58];
+  var MPSKIN = [0xf0c8a0, 0xffe0c8, 0xd9a066, 0x8d5524, 0x78cc58, 0xb8a0e8];   /* teints (memes indices que chez le styliste d'Articleland) */
   var MP = { peer: null, role: "solo", hostConn: null, conns: {}, me: null, others: {}, lastHostMsg: 0, retryT: null, joinT: null, name: "Voyageur-" + Math.floor(1000 + Math.random() * 9000), col: MPCOL[Math.floor(Math.random() * MPCOL.length)], on: false };
+  MP.st = [0, 0, 0];
+  function mpClamp(v, a, b) { v = v | 0; return v < a ? a : v > b ? b : v; }
+  function mpSt(a) { a = Array.isArray(a) ? a : []; return [mpClamp(a[0], 0, MPSKIN.length - 1), mpClamp(a[1], 0, 5), mpClamp(a[2], 0, 6)]; }
+  /* profil du joueur : { n: pseudo, c: couleur de tenue, s: teint, h: chapeau, p: effet de particules }
+     - vient du site principal (styliste du chateau d'Articleland) via l'adresse (#yyp=...), puis est garde dans la memoire du navigateur */
+  (function () {
+    var prof = null, fromHash = false, raw = null, m;
+    try { m = /[#&]yyp=([^&]*)/.exec(location.hash || ""); if (m) { raw = decodeURIComponent(m[1]); fromHash = true; } } catch (e) {}
+    if (raw == null) { try { raw = localStorage.getItem("yyMpProfile"); } catch (e) {} }
+    try { prof = raw ? JSON.parse(raw) : null; } catch (e) { prof = null; }
+    if (!prof || typeof prof !== "object") return;
+    var n = String(prof.n == null ? "" : prof.n).replace(/[\u0000-\u001f<>]/g, "").trim().slice(0, 16);
+    var clean = { n: n, c: mpClamp(prof.c, 0, MPCOL.length - 1), s: mpClamp(prof.s, 0, MPSKIN.length - 1), h: mpClamp(prof.h, 0, 5), p: mpClamp(prof.p, 0, 6) };
+    if (n) MP.name = n;
+    MP.col = MPCOL[clean.c]; MP.st = [clean.s, clean.h, clean.p];
+    if (fromHash) {
+      try { localStorage.setItem("yyMpProfile", JSON.stringify(clean)); } catch (e) {}
+      try { history.replaceState(null, "", location.pathname + location.search); } catch (e) {}
+    }
+  })();
   var mpEl = document.createElement("div");
   mpEl.style.cssText = "position:fixed;left:10px;top:44px;font-size:12px;color:#9fe6ee;text-shadow:1px 1px 0 #000;pointer-events:none;z-index:5;line-height:1.5";
   document.body.appendChild(mpEl);
@@ -663,18 +684,58 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
   var _fin = finale;
   finale = function () { _fin(); mpSendFx(); };
 
-  function mkAvatar(name, col) {
+  /* ---------- chapeaux ---------- */
+  function mpHat(g, h) {
+    function box(w, hh, d, x, y, z, c) { var b = new THREE.Mesh(new THREE.BoxGeometry(w, hh, d), flat(c)); b.position.set(x, y, z); g.add(b); return b; }
+    if (h === 1) { box(.85, .06, .85, 0, 2.1, 0, 0x1a1a1a); box(.5, .55, .5, 0, 2.4, 0, 0x1a1a1a); box(.52, .1, .52, 0, 2.2, 0, 0xd9362b); }
+    else if (h === 2) { box(.62, .16, .62, 0, 2.14, 0, 0xffd24a); [[-.24, -.24], [.24, -.24], [-.24, .24], [.24, .24]].forEach(function (q) { box(.1, .2, .1, q[0], 2.32, q[1], 0xffd24a); }); box(.1, .1, .1, 0, 2.2, -.32, 0xd9362b); }
+    else if (h === 3) { var c1 = box(.1, .34, .1, -.2, 2.22, 0, 0xe04040); c1.rotation.z = .35; var c2 = box(.1, .34, .1, .2, 2.22, 0, 0xe04040); c2.rotation.z = -.35; }
+    else if (h === 4) { box(.62, .26, .62, 0, 2.15, 0, 0x4a8fff); box(.66, .08, .66, 0, 2.05, 0, 0xffffff); box(.14, .14, .14, 0, 2.38, 0, 0xffffff); }
+    else if (h === 5) { box(.6, .2, .6, 0, 2.15, 0, 0xd9362b); box(.6, .05, .3, 0, 2.07, -.4, 0x9c1a15); }
+  }
+  /* ---------- effets de particules autour du joueur ---------- */
+  function mkFx(k) {
+    if (!k) return null;
+    var N = k === 5 ? 36 : 28, pos = new Float32Array(N * 3), col = new Float32Array(N * 3), sd = [], i, cc = new THREE.Color();
+    for (i = 0; i < N; i++) {
+      sd.push(Math.random());
+      if (k === 1) cc.setHex(i % 3 ? 0xffd84a : 0xffffff); else if (k === 2) cc.setHex(i % 2 ? 0xff7a1a : 0xffd24a); else if (k === 3) cc.setHex(0xffffff);
+      else if (k === 4) cc.setHex(0x9fe6ff); else if (k === 5) cc.setHSL(i / N, 1, .6); else cc.setHex(i % 3 ? 0xfffdf6 : 0x6a3a20);
+      col[i * 3] = cc.r; col[i * 3 + 1] = cc.g; col[i * 3 + 2] = cc.b;
+    }
+    var geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3)); geo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    var mt = new THREE.PointsMaterial({ size: (k === 3 || k === 6) ? .13 : .17, vertexColors: true, transparent: true, depthWrite: false, blending: k === 6 ? THREE.NormalBlending : THREE.AdditiveBlending });
+    var pts = new THREE.Points(geo, mt); pts.frustumCulled = false;
+    return { k: k, N: N, sd: sd, pos: pos, geo: geo, pts: pts };
+  }
+  function updFx(f, t) {
+    var i, s, a, y, r, p = f.pos, k = f.k, c, sn;
+    for (i = 0; i < f.N; i++) {
+      s = f.sd[i];
+      if (k === 1) { a = t * 1.8 + s * 6.283; r = .8 + .25 * Math.sin(t * 2 + s * 9); p[i * 3] = Math.cos(a) * r; p[i * 3 + 1] = 1.1 + Math.sin(t * 1.3 + s * 20) * .9; p[i * 3 + 2] = Math.sin(a) * r; }
+      else if (k === 2) { y = (t * .8 + s) % 1; r = .55 * (1 - y) + .1; a = s * 40 + t * 2; p[i * 3] = Math.cos(a) * r; p[i * 3 + 1] = .1 + y * 2.3; p[i * 3 + 2] = Math.sin(a) * r; }
+      else if (k === 3) { y = (t * .45 + s) % 1; r = .5 + s * .8; a = s * 60 + t * .3; p[i * 3] = Math.cos(a) * r; p[i * 3 + 1] = 2.7 - y * 2.7; p[i * 3 + 2] = Math.sin(a) * r; }
+      else if (k === 4) { y = (t * .35 + s) % 1; r = .5 + .3 * Math.sin(t + s * 9); a = s * 50 + t; p[i * 3] = Math.cos(a) * r; p[i * 3 + 1] = y * 2.6; p[i * 3 + 2] = Math.sin(a) * r; }
+      else if (k === 5) { a = t * (i % 2 ? 1.4 : -1.1) + s * 6.283; r = .75 + (i % 2) * .25; p[i * 3] = Math.cos(a) * r; p[i * 3 + 1] = .3 + (i / f.N) * 2.1; p[i * 3 + 2] = Math.sin(a) * r; }
+      else { y = (t * .6 + s) % 1; r = .45 + s * .7; a = s * 70 + t * .5; p[i * 3] = Math.cos(a) * r; p[i * 3 + 1] = 2.7 - y * 2.7; p[i * 3 + 2] = Math.sin(a) * r; }
+    }
+    f.geo.attributes.position.needsUpdate = true;
+  }
+  var mySelfFx = mkFx(MP.st[2]); if (mySelfFx) scene.add(mySelfFx.pts);
+  function mkAvatar(name, col, st) {
+    st = mpSt(st);
     var g = new THREE.Group();
     var body = new THREE.Mesh(new THREE.BoxGeometry(.8, 1.0, .5), flat(col)); body.position.y = 1.0; g.add(body);
     var legs = new THREE.Mesh(new THREE.BoxGeometry(.7, .5, .45), flat(0x2a2a38)); legs.position.y = .25; g.add(legs);
-    var head = new THREE.Mesh(new THREE.BoxGeometry(.55, .55, .55), flat(0xf0c8a0)); head.position.y = 1.8; g.add(head);
+    var head = new THREE.Mesh(new THREE.BoxGeometry(.55, .55, .55), flat(MPSKIN[st[0]])); head.position.y = 1.8; g.add(head);
+    mpHat(g, st[1]);
     var vis = new THREE.Mesh(new THREE.BoxGeometry(.4, .14, .1), flat(0x222233)); vis.position.set(0, 1.85, -.3); g.add(vis);
-    var tag = new THREE.Mesh(new THREE.PlaneGeometry(2.6, .42), label(name, 256, 40, "#2a1a3a", "#ffd24a", 16)); tag.position.y = 2.6; tag.material.side = THREE.DoubleSide; g.add(tag);
-    g.userData.tag = tag; scene.add(g); return g;
+    var tag = new THREE.Mesh(new THREE.PlaneGeometry(2.6, .42), label(nA(name), 256, 40, "#2a1a3a", "#ffd24a", 16)); tag.position.y = 2.9; tag.material.side = THREE.DoubleSide; g.add(tag);
+    g.userData.tag = tag; if (st[2]) { g.userData.fx = mkFx(st[2]); g.add(g.userData.fx.pts); } scene.add(g); return g;
   }
-  function mpUpsert(id, name, col, x, y, z, yaw) {
+  function mpUpsert(id, name, col, x, y, z, yaw, st) {
     var o = MP.others[id];
-    if (!o) { o = MP.others[id] = { id: id, name: name, col: col, x: x, y: y, z: z, yaw: yaw, g: mkAvatar(name, col) }; o.g.position.set(x, y, z); mpStatus(); }
+    if (!o) { o = MP.others[id] = { id: id, name: name, col: col, x: x, y: y, z: z, yaw: yaw, g: mkAvatar(name, col, st) }; o.g.position.set(x, y, z); mpStatus(); }
     o.tx = x; o.ty = y; o.tz = z; o.tyaw = yaw; o.seen = performance.now();
   }
   function mpRemove(id) { var o = MP.others[id]; if (!o) return; scene.remove(o.g); delete MP.others[id]; mpStatus(); }
@@ -708,7 +769,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
       MP.me = id; c = pr.connect(HOST_ID, { reliable: true });
       var to = setTimeout(function () { if (!done && !(c && c.open)) fail(); }, 7000);
       c.on("open", function () {
-        clearTimeout(to); MP.role = "client"; MP.hostConn = c; MP.lastHostMsg = performance.now(); mpSafeSend(c, { t: "hi", name: MP.name, col: MP.col }); mpStatus();
+        clearTimeout(to); MP.role = "client"; MP.hostConn = c; MP.lastHostMsg = performance.now(); mpSafeSend(c, { t: "hi", name: MP.name, col: MP.col, st: MP.st }); mpStatus();
       });
       c.on("data", function (d) { MP.lastHostMsg = performance.now(); mpOnHostData(d); });
       c.on("close", function () { if (MP.role === "client") mpHostLost(); else fail(); });
@@ -724,8 +785,8 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
     if (Object.keys(MP.conns).length >= 14) { try { c.on("open", function () { c.close(); }); } catch (e) {} return; }
     c.on("data", function (d) {
       var e = MP.conns[c.peer];
-      if (d && d.t === "hi") { MP.conns[c.peer] = { c: c, name: String(d.name || "?").slice(0, 20), col: d.col | 0, seen: performance.now() }; mpUpsert(c.peer, MP.conns[c.peer].name, MP.conns[c.peer].col, 0, 0, 22, 0); mpStatus(); }
-      else if (d && d.t === "pos" && e) { e.seen = performance.now(); mpUpsert(c.peer, e.name, e.col, +d.x || 0, +d.y || 0, +d.z || 0, +d.yaw || 0); }
+      if (d && d.t === "hi") { MP.conns[c.peer] = { c: c, name: String(d.name || "?").replace(/[\u0000-\u001f<>]/g, "").slice(0, 20), col: d.col | 0, st: mpSt(d.st), seen: performance.now() }; mpUpsert(c.peer, MP.conns[c.peer].name, MP.conns[c.peer].col, 0, 0, 22, 0, MP.conns[c.peer].st); mpStatus(); }
+      else if (d && d.t === "pos" && e) { e.seen = performance.now(); mpUpsert(c.peer, e.name, e.col, +d.x || 0, +d.y || 0, +d.z || 0, +d.yaw || 0, e.st); }
       else if (d && d.t === "fx" && e) { _fin(); Object.keys(MP.conns).forEach(function (k) { if (k !== c.peer) mpSafeSend(MP.conns[k].c, { t: "fx" }); }); }
     });
     function gone() { delete MP.conns[c.peer]; mpRemove(c.peer); }
@@ -736,7 +797,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
     if (!d) return;
     if (d.t === "st") {
       var seen = {};
-      d.p.forEach(function (q) { if (q[0] === MP.me) return; seen[q[0]] = 1; mpUpsert(q[0], q[1], q[2], q[3], q[4], q[5], q[6]); });
+      d.p.forEach(function (q) { if (q[0] === MP.me) return; seen[q[0]] = 1; mpUpsert(q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]); });
       Object.keys(MP.others).forEach(function (k) { if (!seen[k]) mpRemove(k); });
     } else if (d.t === "fx") _fin();
   }
@@ -749,19 +810,21 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
       mpSafeSend(MP.hostConn, { t: "pos", x: m[0], y: m[1], z: m[2], yaw: m[3] });
       if (now - MP.lastHostMsg > 8000) mpHostLost();
     } else if (MP.role === "host") {
-      var list = [[HOST_ID, MP.name, MP.col, m[0], m[1], m[2], m[3]]];
-      Object.keys(MP.conns).forEach(function (k) { var e = MP.conns[k], o = MP.others[k]; if (now - e.seen > 10000) { try { e.c.close(); } catch (x) {} delete MP.conns[k]; mpRemove(k); } else if (o) list.push([k, e.name, e.col, o.tx, o.ty, o.tz, o.tyaw]); });
+      var list = [[HOST_ID, MP.name, MP.col, m[0], m[1], m[2], m[3], MP.st]];
+      Object.keys(MP.conns).forEach(function (k) { var e = MP.conns[k], o = MP.others[k]; if (now - e.seen > 10000) { try { e.c.close(); } catch (x) {} delete MP.conns[k]; mpRemove(k); } else if (o) list.push([k, e.name, e.col, o.tx, o.ty, o.tz, o.tyaw, e.st]); });
       Object.keys(MP.conns).forEach(function (k) { mpSafeSend(MP.conns[k].c, { t: "st", p: list }); });
     }
   }, 100);
   /* --- rendu des joueurs distants (appelé à chaque image) --- */
   function mpFrame(dt) {
-    var k = Math.min(1, dt * 10), cp = camera.position;
+    var k = Math.min(1, dt * 10), cp = camera.position, tt = performance.now() / 1000;
+    if (mySelfFx) { mySelfFx.pts.position.set(cp.x, cp.y - 1.7, cp.z); updFx(mySelfFx, tt); }
     Object.keys(MP.others).forEach(function (id) {
       var o = MP.others[id], g = o.g;
       g.position.x += (o.tx - g.position.x) * k; g.position.y += (o.ty - g.position.y) * k; g.position.z += (o.tz - g.position.z) * k;
       var dy = o.tyaw - g.rotation.y; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); g.rotation.y += dy * k;
       g.userData.tag.rotation.y = Math.atan2(cp.x - g.position.x, cp.z - g.position.z) - g.rotation.y;
+      if (g.userData.fx) updFx(g.userData.fx, tt);
     });
   }
   function mpStart() {
