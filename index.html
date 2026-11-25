@@ -75,6 +75,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
 #god button:hover{background:#5a4a8a}
 #god button.arr{background:#6a4a10}
 #god .small{opacity:.7;font-size:12px}
+#hud{display:none!important}
 </style>
 </head>
 <body>
@@ -104,7 +105,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
 </div></div>
 <div id="title">
   <h1>MINIJEUX</h1>
-  <p>Une arène romaine sous les feux d'artifice, des ponts sur les douves, des châteaux, des cathédrales et huit portails encore endormis. Frenegonde vous attend sur l'estrade.</p>
+  <p>Une arène romaine sous les feux d'artifice, des ponts sur les douves, des châteaux, des cathédrales et huit portails dont le premier est ouvert. Frenegonde vous attend sur l'estrade.</p>
   <button id="start">ENTRER DANS L'ARÈNE</button>
   <div class="ctl">Clavier + souris, ou joystick à gauche et glisser à droite sur téléphone</div>
 </div>
@@ -125,7 +126,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
   function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
 
   /* ---------- heure : jour / nuit ---------- */
-  var night = (function () { var q = location.search; if (/nuit=1/.test(q)) return true; if (/jour=1/.test(q)) return false; var h = new Date().getHours(); return h >= 20 || h < 8; })();
+  var night = (function () { var q = location.search; if (/nuit=1/.test(q)) return true; if (/jour=1/.test(q)) return false; var h = new Date().getHours(); return h >= 19 || h < 8; })();
 
   /* ---------- rendu PS1 ---------- */
   var cv = $("c"), renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: false, powerPreference: "low-power" });
@@ -240,12 +241,12 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
   function say(title, list) { showDlg(title, typeof list === "string" ? list : pick(list), [{ l: "OK", f: hideDlg }]); }
 
   /* ===================== LOBBY MINIJEUX : L'ARENE DE GERTRUDE ===================== */
-  night = !/jour=1/.test(location.search);
+  // Cycle jour/nuit local conservé.
   var zone = "lobby", inCave = false, cutscene = null, started = false, yaw = 0, pitch = 0;
   var RA = 26, RO = 41, RM1 = 50, RM2 = 62, PI = Math.PI, castleGlow = [], portals = [], flames = [], SPOTS = [], near = null;
   function spot(x, z, r, l, f) { SPOTS.push({ x: x, z: z, r: r, l: l, f: f }); }
   function nearest() { var best = null, bd = 1e9, p = camera.position; SPOTS.forEach(function (s) { if (s.y && jy < s.y - .6) return; var d = Math.hypot(s.x - p.x, s.z - p.z); if (d < s.r && d < bd) { bd = d; best = s; } }); return best; }
-  function interact() { if (cutscene) return; if (dlgOn) { if (dlgKeys[0]) dlgKeys[0].f(); return; } if (near) near.f(); }
+  function interact() { if(CR.active&&!dlgOn)return; if (cutscene) return; if (dlgOn) { if (dlgKeys[0]) dlgKeys[0].f(); return; } if (near) near.f(); }
   $("prompt").onclick = interact; $("act").onclick = interact;
   function rtx(t) { var e = $("rtx"); e.textContent = nA(t); e.style.opacity = 1; clearTimeout(rtx._t); rtx._t = setTimeout(function () { e.style.opacity = 0; }, 2800); }
   function M(g, m, x, y, z, p) { var o = new THREE.Mesh(g, m); o.position.set(x, y, z); (p || forest).add(o); return o; }
@@ -366,8 +367,8 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
     bx(8, .5, 3, ws(2, 1), 0, .25, 0, pg); [-1, 1].forEach(function (s) { cy(.75, .9, 7.6, 8, ws(1, 3), s * 2.9, 4.3, 0, pg); bx(2, .6, 2, GOLD, s * 2.9, 8.4, 0, pg); cy(.5, .5, 1.2, 6, WIN_GOLD, s * 2.9, 9.4, 0, pg); });
     M(new THREE.TorusGeometry(2.9, .5, 5, 12, PI), GOLD, 0, 8.2, 0, pg); bx(5.8, 7.6, .2, gm, 0, 4.3, 0, pg); M(new THREE.CircleGeometry(2.9, 12, 0, PI), gm, 0, 8.1, 0, pg);
     var rg = M(new THREE.TorusGeometry(1.9, .14, 4, 10), glow(0xffffff), 0, 5.2, .3, pg); portals.push({ m: gm, c: gc, r: rg, o: i });
-    bx(4, .9, .14, label("PORTAIL " + RN[i], 192, 36, "#2a1a3a", "#ffd24a", 17), 0, 11.1, 0, pg);
-    obb(px, pz, pg.rotation.y, 0, 0, 4.1, 1.6); (function (n, q) { spot(px, pz, 8.5, "Portail " + RN[n], function () { say("Portail " + RN[n], q); }); })(i, PQ[i]);
+    bx(4, .9, .14, label(i===0?"I - DALLES FRIABLES":"PORTAIL " + RN[i], 192, 36, "#2a1a3a", "#ffd24a", 17), 0, 11.1, 0, pg);
+    obb(px, pz, pg.rotation.y, 0, 0, 4.1, 1.6); (function (n, q) { spot(px, pz, 8.5, n===0?"Dalles friables":"Portail " + RN[n], function () { if(n===0)crumblePortal();else say("Portail " + RN[n], q); }); })(i, PQ[i]);
   }
 
   /* ---------- chateaux & cathedrales ---------- */
@@ -614,9 +615,9 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
 
   /* ---------- saut + mode dieu ---------- */
   var jy = 0, vy = 0, godOn = false, godMenu = false, godFly = false, godClip = false, godHigh = false, godSpd = 1, godBuf = [];
-  function jumpNow() { if (jy <= .001 && !cutscene && !dlgOn && !godMenu) { vy = godHigh ? 11 : 6.2; tone(260, .09, "square", .04); } }
+  function jumpNow() { if(CR.active&&(CR.phase!=="play"||CR.out[crId()]||CR.spectator))return; if (jy <= .001 && !cutscene && !dlgOn && !godMenu) { vy = godHigh ? 11 : 6.2; tone(260, .09, "square", .04); } }
   $("jump").addEventListener("pointerdown", function (e) { e.preventDefault(); if (started && !godFly) jumpNow(); });
-  function godOpen() {
+  function godOpen() { if(CR.active)return;
     godOn = true; godMenu = true; for (var k in keys) keys[k] = false;
     try { if (document.pointerLockElement) document.exitPointerLock(); } catch (e) {}
     $("prompt").style.display = "none"; godBuild(); $("god").style.display = "flex"; $("godtag").style.display = "block";
@@ -790,6 +791,9 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
       var e = MP.conns[c.peer];
       if (d && d.t === "hi") { MP.conns[c.peer] = { c: c, name: String(d.name || "?").replace(/[\u0000-\u001f<>]/g, "").slice(0, 20), col: d.col | 0, st: mpSt(d.st), seen: performance.now() }; mpUpsert(c.peer, MP.conns[c.peer].name, MP.conns[c.peer].col, 0, 0, 22, 0, MP.conns[c.peer].st); mpStatus(); }
       else if (d && d.t === "pos" && e) { e.seen = performance.now(); mpUpsert(c.peer, e.name, e.col, +d.x || 0, +d.y || 0, +d.z || 0, +d.yaw || 0, e.st); }
+      else if(d && d.t==='crrequest' && e && !CR.active){crLaunch();}
+      else if(d && d.t==='crfallen' && e && CR.active && CR.phase==='play' && d.rid===CR.rid && CR.ids.indexOf(c.peer)>=0){CR.out[c.peer]=true;}
+      else if(d && d.t==='crready' && e && CR.active && d.rid===CR.rid && CR.ids.indexOf(c.peer)>=0){CR.ready[c.peer]=true;}
       else if (d && d.t === "fx" && e) { _fin(); Object.keys(MP.conns).forEach(function (k) { if (k !== c.peer) mpSafeSend(MP.conns[k].c, { t: "fx" }); }); }
     });
     function gone() { delete MP.conns[c.peer]; mpRemove(c.peer); }
@@ -802,7 +806,9 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
       var seen = {};
       d.p.forEach(function (q) { if (q[0] === MP.me) return; seen[q[0]] = 1; mpUpsert(q[0], q[1], q[2], q[3], q[4], q[5], q[6], q[7]); });
       Object.keys(MP.others).forEach(function (k) { if (!seen[k]) mpRemove(k); });
-    } else if (d.t === "fx") _fin();
+    } else if(d.t==='crstate'){crReceive(d);}
+      else if(d.t==='crcancel'&&CR.active&&d.rid===CR.rid){crReturn();rtx('Manche annulée : un joueur ne répond pas');}
+      else if (d.t === "fx") _fin();
   }
 
   /* --- horloge réseau : 10 Hz (setInterval, tient même onglet en arrière-plan) --- */
@@ -848,17 +854,95 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;font-family:"Cour
   addEventListener("beforeunload", function () { mpDestroyPeer(); });
   mpStatus();
 
+
+  /* Dalles friables : annonce -> teleportation -> acquittements -> decompte -> manche. */
+  var CR={active:false,phase:'',rid:'',ids:[],ready:{},out:{},tiles:[],group:null,auth:false,elapsed:0};
+  var crHUD=document.createElement('div');crHUD.style.cssText='position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:#181025ee;color:white;border:2px solid #ffd24a;padding:12px;z-index:9;text-align:center;display:none';document.body.appendChild(crHUD);
+  var crPopup=document.createElement('div');crPopup.style.cssText='position:fixed;inset:0;background:#100820cc;z-index:20;display:none;align-items:center;justify-content:center;pointer-events:none';
+  var crBox=document.createElement('div');crBox.style.cssText='max-width:520px;margin:20px;padding:28px;background:#291c3f;border:3px solid #ffd24a;text-align:center;color:white;font:18px monospace;line-height:1.6';crPopup.appendChild(crBox);document.body.appendChild(crPopup);
+  function crId(){return MP.role==='client'?MP.me:HOST_ID;}
+  function crSend(d){if(MP.role==='host')Object.keys(MP.conns).forEach(function(id){mpSafeSend(MP.conns[id].c,d);});}
+  function crPacket(){return {t:'crstate',rid:CR.rid,phase:CR.phase,ids:CR.ids,ready:Object.keys(CR.ready),out:Object.keys(CR.out),remaining:Math.max(0,CR.deadline-performance.now()),elapsed:CR.elapsed,lv:CR.tiles.map(function(t){return Math.round(t.life*1000);})};}
+  function crClear(){if(!CR.group)return;scene.remove(CR.group);var gs=new Set(),ms=new Set();CR.group.traverse(function(o){if(o.geometry)gs.add(o.geometry);if(o.material)ms.add(o.material);});gs.forEach(function(g){g.dispose();});ms.forEach(function(m){m.dispose();});CR.group=null;CR.tiles=[];}
+  function crBegin(d,auth){
+    if(CR.active)crReturn();
+    hideDlg();godMenu=false;$('god').style.display='none';
+    CR.saved={on:godOn,fly:godFly,clip:godClip,high:godHigh,spd:godSpd};godOn=godFly=godClip=godHigh=false;godSpd=1;$('godtag').style.display='none';
+    CR.active=true;CR.resultShown=false;CR.auth=auth;CR.rid=d.rid;CR.ids=d.ids.slice();CR.ready={};CR.out={};CR.phase='announce';CR.elapsed=0;CR.last=performance.now();CR.deadline=performance.now()+4000;
+    cutscene=null;near=null;for(var k in keys)keys[k]=false;joy.x=joy.y=0;$('prompt').style.display='none';
+    crPopup.style.display='flex';crBox.textContent='Un minijeu est lancé ! Les dalles friables : reste le dernier sur la plateforme. Téléportation automatique dans quelques secondes…';crHUD.style.display='block';
+  }
+  function crLaunch(){
+    if(CR.active)return;
+    if(MP.role==='client'){mpSafeSend(MP.hostConn,{t:'crrequest'});rtx('Demande envoyée à l’hôte');return;}
+    if(MP.on&&MP.role!=='host'){rtx('Connexion multijoueur en cours…');return;}
+    var d={t:'crstate',rid:Date.now().toString(36),ids:[crId()].concat(Object.keys(MP.conns)),phase:'announce'};crBegin(d,true);crSend(crPacket());
+  }
+  function crumblePortal(){showDlg('Portail I — Dalles friables','Le lancement avertit les joueurs du hub, puis les téléporte avant le compte à rebours. Une plaque tient 4,5 secondes sous les pieds.',[{l:'Lancer pour tous',f:function(){hideDlg();crLaunch();}},{l:'Retour',f:hideDlg}]);}
+  function crTeleport(){
+    crClear();CR.group=new THREE.Group();scene.add(CR.group);var geo=new THREE.BoxGeometry(2.94,.55,2.94);
+    for(var z=-5;z<=5;z++)for(var x=-5;x<=5;x++){var m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:0x39d45c}));m.position.set(400+x*3,29.725,z*3);CR.group.add(m);CR.tiles.push({x:400+x*3,z:z*3,life:1,mesh:m});}
+    var i=CR.ids.indexOf(crId());CR.spectator=i<0;i=Math.max(0,i);camera.position.set(400+(i%5-2)*6,31.7,(Math.floor(i/5)-1)*6);jy=30;vy=hvx=hvz=0;gfloor=30;yaw=0;pitch=.35;
+    CR.phase='loading';crBox.textContent='Téléportation effectuée ! En attente de l’arrivée des autres joueurs…';
+    if(CR.auth)CR.ready[crId()]=true;else mpSafeSend(MP.hostConn,{t:'crready',rid:CR.rid});
+  }
+  function crAt(x,z){var cx=Math.round((x-400)/3),cz=Math.round(z/3);if(cx<-5||cx>5||cz<-5||cz>5)return null;var t=CR.tiles[(cz+5)*11+cx+5];return t&&t.life>0?t:null;}
+  function crPlayers(){var a=[{id:crId(),x:camera.position.x,z:camera.position.z,y:jy}];Object.keys(MP.others).forEach(function(id){var o=MP.others[id];a.push({id:id,x:o.tx,z:o.tz,y:o.ty});});return a.filter(function(p){return CR.ids.indexOf(p.id)>=0;});}
+  function crFinish(w){CR.phase='over';crPopup.style.display='none';hideDlg();showDlg(w===crId()?'Victoire !':'Manche terminée','Dernier survivant : '+(w?(w===crId()?MP.name:(MP.others[w]?MP.others[w].name:'un joueur')):'aucun')+'\nDurée : '+Math.floor(CR.elapsed)+' s.',[{l:'Retour au lobby',f:crReturn}]);}
+  function crReturn(){hideDlg();CR.active=false;CR.phase='';crClear();crPopup.style.display='none';crHUD.style.display='none';if(CR.saved){godOn=CR.saved.on;godFly=CR.saved.fly;godClip=CR.saved.clip;godHigh=CR.saved.high;godSpd=CR.saved.spd;$('godtag').style.display=godOn?'block':'none';}camera.position.set(0,1.7,22);jy=vy=hvx=hvz=0;gfloor=0;pitch=.2;yaw=0;for(var k in keys)keys[k]=false;joy.x=joy.y=0;}
+  function crReceive(d){
+    if(!d||!Array.isArray(d.ids))return;
+    if(d.rid!==CR.rid){if(d.phase!=='announce')return;crBegin(d,false);}
+    if(!CR.active)return;CR.last=performance.now();CR.ids=d.ids;CR.elapsed=d.elapsed||0;CR.ready={};(d.ready||[]).forEach(function(id){CR.ready[id]=true;});var wasOut=CR.out[crId()];CR.out={};if(wasOut)CR.out[crId()]=true;(d.out||[]).forEach(function(id){CR.out[id]=true;});
+    if(d.phase!=='announce'&&!CR.group)crTeleport();
+    CR.phase=d.phase;CR.deadline=performance.now()+(d.remaining||0);
+    if(d.lv&&CR.tiles.length===d.lv.length)CR.tiles.forEach(function(t,i){t.life=Math.min(t.life,d.lv[i]/1000);});
+    if(CR.phase==='over'&&!CR.resultShown){CR.resultShown=true;crFinish(d.winner);}
+  }
+  var crNet=setInterval(function(){
+    if(!CR.active)return;
+    if(!CR.auth){if(MP.role!=='client'||performance.now()-CR.last>12000){crReturn();rtx('Hôte déconnecté : retour au lobby');}else if(CR.phase==='loading')mpSafeSend(MP.hostConn,{t:'crready',rid:CR.rid});return;}
+    if(MP.on&&MP.role!=='host'){crReturn();return;}
+    var now=performance.now();
+    CR.ids=CR.ids.filter(function(id){return id===crId()||!!MP.conns[id];});
+    if(CR.phase==='announce'&&now>=CR.deadline){crTeleport();CR.deadline=now+15000;}
+    if(CR.phase==='loading'){
+      if(now>=CR.deadline){crSend({t:'crcancel',rid:CR.rid});crReturn();rtx('Manche annulée : un joueur ne répond pas');return;}
+      if(CR.ids.every(function(id){return !!CR.ready[id];})){CR.phase='countdown';CR.deadline=now+5000;}
+    }
+    if(CR.phase==='countdown'&&now>=CR.deadline){CR.phase='play';CR.elapsed=0;}
+    var d=crPacket();if(CR.phase==='over')d.winner=CR.winner;crSend(d);
+  },100);
+  function crFrame(dt){
+    crHUD.textContent=CR.phase==='announce'?'Une manche va commencer':CR.phase==='loading'?'Arrivées : '+Object.keys(CR.ready).length+'/'+CR.ids.length:CR.phase==='countdown'?'Départ dans '+Math.max(1,Math.ceil((CR.deadline-performance.now())/1000)):'';
+    if(CR.phase==='countdown'){crBox.textContent='Tout le monde est arrivé ! Départ dans '+Math.max(1,Math.ceil((CR.deadline-performance.now())/1000));return;}
+    if(CR.phase!=='play')return;crPopup.style.display='none';CR.elapsed+=dt;
+    var p=camera.position,dead=CR.out[crId()]||CR.spectator,mx=joy.x,mz=joy.y;
+    if(keys.z||keys.w||keys.arrowup)mz--;if(keys.s||keys.arrowdown)mz++;if(keys.q||keys.a||keys.arrowleft)mx--;if(keys.d||keys.arrowright)mx++;
+    if(dlgOn||dead){mx=0;mz=0;}var len=Math.max(1,Math.hypot(mx,mz)),speed=keys.shift?8:5.5,c=Math.cos(yaw),sn=Math.sin(yaw);
+    p.x+=(mx*c+mz*sn)/len*speed*dt;p.z+=(-mx*sn+mz*c)/len*speed*dt;
+    if(CR.auth){var occupied=new Set();crPlayers().forEach(function(pl){if(CR.out[pl.id]||Math.abs(pl.y-30)>.12)return;var t=crAt(pl.x,pl.z);if(t)occupied.add(t);});occupied.forEach(function(t){t.life=Math.max(0,t.life-dt/4.5);});}
+    var prev=jy;vy-=18*dt;jy+=vy*dt;var tile=crAt(p.x,p.z);gfloor=tile?30:-100;if(tile&&prev>=30&&jy<=30){jy=30;vy=0;}p.y=jy+1.7;
+    if(jy<20){CR.out[crId()]=true;if(!CR.auth)mpSafeSend(MP.hostConn,{t:'crfallen',rid:CR.rid});}
+    if(dead){p.set(400,57,22);jy=55;vy=0;}
+    CR.tiles.forEach(function(t){t.mesh.visible=t.life>0;t.mesh.material.color.setHSL(t.life*.33,.8,.48);});
+    if(CR.auth){crPlayers().forEach(function(pl){if(pl.y<20)CR.out[pl.id]=true;});}
+    var alive=CR.ids.filter(function(id){return !CR.out[id];});crHUD.textContent=(dead?'Spectateur · ':'')+'Survivants : '+alive.length+'/'+CR.ids.length+' · '+Math.floor(CR.elapsed)+' s';
+    if(CR.auth&&((CR.ids.length>1&&alive.length<=1)||(CR.ids.length===1&&alive.length===0))){CR.winner=alive.length?alive[0]:null;crFinish(CR.winner);var d=crPacket();d.winner=CR.winner;crSend(d);}
+  }
+
   /* ---------- boucle ---------- */
   var hvx = 0, hvz = 0;
   function jumpNow() { if (jy <= gfloor + .001 && !cutscene && !dlgOn && !godMenu) { vy = godHigh ? 11 : 6.8; tone(260, .09, "square", .04); } }
   var last = performance.now(), walkT = 0, stepT = 0, clock = 0;
   INSTS.forEach(function (o) { o.done(); });
   applyTime();
+  setInterval(function(){if(/[?&](jour|nuit)=1/.test(location.search))return;var h=new Date().getHours(),n=h<8||h>=19;if(n!==night){night=n;applyTime();}},10000);
   function frame(now) {
     requestAnimationFrame(frame);
     var dt = Math.min(.05, (now - last) / 1000); last = now; clock += dt;
     var p = camera.position;
-    if (cutscene && cutscene.intro) {
+    if (CR.active) { crFrame(dt); } else if (cutscene && cutscene.intro) {
       introT += dt; pitch += ((introT < 4.5 ? .42 : .08) - pitch) * dt * 1.2; yaw = Math.sin(introT * .5) * .25; p.set(0, 1.7, 22);
       if (introT > 6.5 && !dlgOn) skipIntro();
     } else if (started && !dlgOn && !godMenu) {
